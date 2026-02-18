@@ -1,4 +1,4 @@
-name: 1. Fetch and Convert CSV
+name: Sync CSV to D1
 
 on:
   schedule:
@@ -6,10 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  convert:
+  convert_and_deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -17,23 +15,28 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: "pip"
 
       - name: Install dependencies
         run: pip install pandas requests
 
-      - name: Run Python Converter
+      - name: Run Converter
         run: python converter.py
 
+      # 第一步：把生成的 SQL 同步回 GitHub 仓库记录一下
       - name: Commit SQL
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          # 检查是否有文件变化，没变化就不 commit
           if [ -n "$(git status --porcelain update.sql)" ]; then
             git add update.sql
-            git commit -m "Update SQL from source [skip ci]"
+            git commit -m "Update SQL [skip ci]"
             git push
-          else
-            echo "No changes detected in SQL file."
           fi
+
+      # 第二步：直接把 SQL 部署到 D1
+      - name: Deploy to D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # 注意：这里直接用生成的本地文件执行
+          command: d1 execute phone-db --remote --file=update.sql
