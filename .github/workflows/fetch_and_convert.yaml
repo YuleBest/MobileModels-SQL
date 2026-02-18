@@ -1,42 +1,53 @@
-name: Sync CSV to D1
+name: Sync Mobile Models to Cloudflare D1
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
-  workflow_dispatch:
+    - cron: "0 */3 * * *" # 每 3 小时跑一次
+  workflow_dispatch: # 允许手动触发测试
 
 jobs:
-  convert_and_deploy:
+  build_and_deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: write # 允许 Action 把生成的 SQL 提交回仓库
 
+    steps:
+      # 1. 拉取当前仓库代码
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. 设置 Python 环境
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
+      # 3. 安装脚本依赖
+      - name: Install Dependencies
         run: pip install pandas requests
 
+      # 4. 执行转换脚本，生成 update.sql
       - name: Run Converter
         run: python converter.py
 
-      # 第一步：把生成的 SQL 同步回 GitHub 仓库记录一下
-      - name: Commit SQL
+      # 5. 将生成的 update.sql 提交到仓库（留作备份和历史记录）
+      - name: Commit and Push SQL
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           if [ -n "$(git status --porcelain update.sql)" ]; then
             git add update.sql
-            git commit -m "Update SQL [skip ci]"
+            git commit -m "Update SQL from source [skip ci]"
             git push
+          else
+            echo "No changes in SQL file, skipping commit."
           fi
 
-      # 第二步：直接把 SQL 部署到 D1
+      # 6. 部署到 Cloudflare D1
       - name: Deploy to D1
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # 注意：这里直接用生成的本地文件执行
-          command: d1 execute phone-db --remote --file=update.sql
+          # 直接执行生成的 update.sql
+          # 注意：phone-db 是你的数据库名，确保和 wrangler d1 create 时一致
+          command: d1 execute phone-db --remote --file=update.sql --account-id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
