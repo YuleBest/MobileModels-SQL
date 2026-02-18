@@ -2,7 +2,7 @@ name: Sync to D1 via Python API
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    - cron: "2 * * * *"
   workflow_dispatch:
 
 jobs:
