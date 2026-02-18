@@ -1,0 +1,39 @@
+name: 1. Fetch and Convert CSV
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install pandas requests
+
+      - name: Run Python Converter
+        run: python converter.py
+
+      - name: Commit SQL
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          # 检查是否有文件变化，没变化就不 commit
+          if [ -n "$(git status --porcelain update.sql)" ]; then
+            git add update.sql
+            git commit -m "Update SQL from source [skip ci]"
+            git push
+          else
+            echo "No changes detected in SQL file."
+          fi
