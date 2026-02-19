@@ -1,0 +1,45 @@
+name: Sync Mobile Models to R2
+
+on:
+  push:
+    branches:
+      - main
+  # 允许手动触发更新
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # 缓存 pip 依赖，加速后续运行
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests boto3
+
+      - name: Run Sync Script
+        env:
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+        run: python sync_script.py
+
+      - name: Commit MD5 & Update Time
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add last_csv_md5.txt update_time.txt || echo "No changes to commit"
+          git commit -m "chore: update data md5 and timestamp" || echo "No changes to commit"
+          git push || echo "No changes to push"
